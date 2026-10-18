@@ -170,9 +170,9 @@ class TestRuleTwoSimpleNameAndAnnotation(unittest.TestCase):
 
     def test_split_name_annotations(self):
         """姓名拆分：基础名 + 括号注解"""
-        self.assertEqual(Contact.split_name_annotations("张三（老师）"), ("张三", ["免师"]))
-        self.assertEqual(Contact.split_name_annotations("张三(免师)"), ("张三", ["免师"]))
-        self.assertEqual(Contact.split_name_annotations("张三【免师】"), ("张三", ["免师"]))
+        self.assertEqual(Contact.split_name_annotations("张三（老师）"), ("张三", ["老师"]))
+        self.assertEqual(Contact.split_name_annotations("张三(老师)"), ("张三", ["老师"]))
+        self.assertEqual(Contact.split_name_annotations("张三【老师】"), ("张三", ["老师"]))
         self.assertEqual(Contact.split_name_annotations("张三"), ("张三", []))
         # 整体被括号占据时不拆分，保留原名
         self.assertEqual(Contact.split_name_annotations("（未知）"), ("（未知）", []))
@@ -196,17 +196,17 @@ class TestRuleTwoSimpleNameAndAnnotation(unittest.TestCase):
         merged = Contact.merge_group([a, b])
 
         self.assertEqual(merged.name, "张三")
-        self.assertEqual(merged.notes, "免师")
+        self.assertEqual(merged.notes, "老师")
         self.assertEqual(merged.phones, ["13812345678"])
 
     def test_bracket_annotation_with_fullwidth_and_halfwidth(self):
         """全角/半角括号都应被识别"""
         merged = Contact.merge_group([
-            make_contact("张三(免师)", ["13812345678"]),
+            make_contact("张三(老师)", ["13812345678"]),
             make_contact("张三", ["13812345678"]),
         ])
         self.assertEqual(merged.name, "张三")
-        self.assertIn("免师", merged.notes)
+        self.assertIn("老师", merged.notes)
 
     def test_both_bracket_forms_merge_into_plain_name(self):
         """两种括注形式都并入同一人时，姓名取"张三"，两个括注都进备注"""
@@ -231,7 +231,7 @@ class TestRuleTwoSimpleNameAndAnnotation(unittest.TestCase):
         self.assertEqual(manager.count(), 2)
         merged = [c for c in manager.get_all_contacts() if c.name == "张三"]
         self.assertEqual(len(merged), 1, "未生成简洁姓名'张三'")
-        self.assertEqual(merged[0].notes, "免师")
+        self.assertEqual(merged[0].notes, "老师")
 
     def test_different_names_not_lost(self):
         """姓名基础部分不同时，另一方姓名作为别名保留"""
@@ -271,7 +271,7 @@ class TestRuleTwoSimpleNameAndAnnotation(unittest.TestCase):
         self.assertEqual(manager.count(), 1)
         remaining = manager.get_all_contacts()[0]
         self.assertEqual(remaining.name, "张三")
-        self.assertEqual(remaining.notes, "免师")
+        self.assertEqual(remaining.notes, "老师")
 
     def test_manager_merge_handles_contact_in_multiple_phone_groups(self):
         """同一联系人落入多个号码组时只合并一次，不重复计数"""

@@ -411,7 +411,7 @@ END:VCARD
             self.assertEqual(self.app.contact_manager.count(), 1)
             merged = self.app.contact_manager.get_all_contacts()[0]
             self.assertEqual(merged.name, "张三")
-            self.assertIn("免师", merged.notes)
+            self.assertIn("老师", merged.notes)
             self.assertEqual(merged.address, "成都市高新区")
             self.assertEqual(merged.emails, ["xiao@example.com"])
         finally:
