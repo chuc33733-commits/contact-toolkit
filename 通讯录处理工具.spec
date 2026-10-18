@@ -6,12 +6,16 @@
 产物：dist/通讯录处理工具.exe
 """
 
+from PyInstaller.utils.hooks import collect_dynamic_libs, collect_submodules
+
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[],
+    binaries=collect_dynamic_libs('chardet'),
     datas=[],
-    hiddenimports=[],
+    # chardet 5.x 的 models/pipeline 是 mypyc 编译的子模块，静态分析看不到，
+    # 必须显式收集，否则运行时报 No module named 'chardet.models._format__mypyc'
+    hiddenimports=collect_submodules('chardet'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
