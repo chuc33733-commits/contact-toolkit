@@ -557,19 +557,28 @@ def run_selftest(doc: str, out: str, limit: int = 0) -> int:
                         datefmt="%H:%M:%S")
     out_dir = Path(out).expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)
+    lines: List[str] = []
+
+    def say(msg: str) -> None:
+        lines.append(msg)
+        try:                      # 打包成无控制台 exe 时 stdout 可能为 None
+            print(msg)
+        except Exception:         # noqa: BLE001
+            pass
+
     try:
         doc_id = cd.TencentSmartsheetClient.parse_doc_id(doc)
         client = cd.TencentSmartsheetClient(doc_id)
         sheets = client.list_sheets()
         if not sheets:
-            print("FAIL: 没有子表")
+            say("FAIL: 没有子表")
             return 1
         sheet_id = sheets[0]["id"]
         jobs_all, _ = cd.build_jobs(client, sheet_id, None, None, None, None,
                                     strict_id=True, kinds=cd.KINDS_ALL)
         jobs = jobs_all[:limit] if limit else jobs_all
         if not jobs:
-            print("FAIL: 没有任务")
+            say("FAIL: 没有任务")
             return 1
         pad_id = client.get_pad_id(sheet_id)
         url_map = client.fetch_attachment_urls(
@@ -582,11 +591,17 @@ def run_selftest(doc: str, out: str, limit: int = 0) -> int:
             cd.download_one(j, client=client, out_dir=out_dir, pre_existing=pre)
             ok += j.status == "ok"
         cd.write_report(out_dir / "download_report.csv", jobs, fmt="csv", mapping="cert")
-        print(f"SELFTEST OK: {ok}/{len(jobs)} -> {out_dir}")
-        return 0 if ok == len(jobs) else 2
+        say(f"SELFTEST OK: {ok}/{len(jobs)} -> {out_dir}")
+        rc = 0 if ok == len(jobs) else 2
     except Exception as exc:  # noqa: BLE001
-        print(f"SELFTEST FAILED: {type(exc).__name__}: {exc}")
-        return 1
+        say(f"SELFTEST FAILED: {type(exc).__name__}: {exc}")
+        rc = 1
+    finally:
+        try:
+            (out_dir / "selftest.log").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        except OSError:
+            pass
+    return rc
 
 
 def main(argv: Optional[List[str]] = None) -> int:

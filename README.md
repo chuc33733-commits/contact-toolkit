@@ -24,7 +24,7 @@ python certdown/cert_gui.py          # 腾讯文档证书下载器
 3. 打包 exe（Windows）：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File build\build-all.ps1
+powershell -ExecutionPolicy Bypass -File packaging\build-all.ps1
 # 或分别执行：
 pyinstaller --clean --noconfirm 通讯录处理工具.spec
 pyinstaller --clean --noconfirm 腾讯文档证书下载器.spec
@@ -76,7 +76,7 @@ gui/ models/ processors/ utils/ config/   通讯录工具业务代码
 certdown/               证书下载器内核 + 图形界面（cert_gui.py）+ 单元测试
 线上版/                  FastAPI 网页层（主页 /contacts /cert）
 Dockerfile compose.yaml 网页版容器
-*.spec build/           PyInstaller 打包配置与脚本
+*.spec packaging/           PyInstaller 打包配置与脚本
 ```
 
 ## 测试
