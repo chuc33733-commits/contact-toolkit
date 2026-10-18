@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+build/
+dist/
+logs/
+*.log
+.venv/
+venv/
+.DS_Store
+# 个人数据与测试样本不入库
+*.vcf
+示例照片/
+_测试样本/
+_调研探针输出/
+验证证据/

@@ -1,0 +1,30 @@
+# 构建上下文 = 项目根目录。只保留 web 运行链路所需内容。
+**/__pycache__
+**/*.pyc
+.git
+.gitignore
+
+# 桌面版专属（线上不复用）
+gui/
+main.py
+*.spec
+logs/
+tests/
+示例照片/
+验证证据/
+_调研探针输出/
+
+# 方案/说明/探针与模板产物（非运行依赖）
+*.md
+*.xlsx
+*.xlsm
+*.xls
+*.vcf
+_*.py
+_*.txt
+generate_excel_template.py
+test_import_functions.py
+通讯录工具线上化方案.md
+
+# 证书下载器：镜像只需内核两文件（cert_downloader.py / exporter.py），测试套件不入镜像
+certdown/tests/

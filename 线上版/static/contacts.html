@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>通讯录处理工具 · 在线版</title>
+<style>
+  :root{
+    --bg:#f4f6fb; --card:#fff; --ink:#1f2937; --muted:#6b7280;
+    --line:#e5e7eb; --brand:#2563eb; --brand-d:#1d4ed8; --ok:#059669;
+    --warn:#b45309; --err:#dc2626; --soft:#eef2ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+  header{background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;
+    padding:20px 28px;box-shadow:0 2px 10px rgba(37,99,235,.25)}
+  header h1{margin:0;font-size:20px;font-weight:600}
+  header p{margin:4px 0 0;opacity:.85;font-size:12.5px}
+  main{max-width:1180px;margin:0 auto;padding:22px 18px 60px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:18px;box-shadow:0 1px 3px rgba(16,24,40,.04)}
+  .card h2{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
+  .card h2 .idx{background:var(--soft);color:var(--brand-d);width:22px;height:22px;
+    border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+  .drop{border:2px dashed #c7d2fe;border-radius:10px;padding:22px;text-align:center;
+    color:var(--muted);cursor:pointer;transition:.15s;background:#fafbff}
+  .drop:hover,.drop.over{border-color:var(--brand);background:#eef2ff;color:var(--brand-d)}
+  .drop strong{color:var(--brand-d)}
+  .filelist{margin-top:10px;font-size:12.5px;color:var(--muted);word-break:break-all}
+  .filelist div{padding:2px 0}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .hint code{background:#f3f4f6;padding:1px 5px;border-radius:4px}
+  button{border:0;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;
+    cursor:pointer;transition:.15s}
+  .btn-primary{background:var(--brand);color:#fff}
+  .btn-primary:hover{background:var(--brand-d)}
+  .btn-ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn-ghost:hover{background:#f9fafb}
+  .btn-danger{background:#fff;color:var(--err);border:1px solid #fecaca}
+  .btn-danger:hover{background:#fef2f2}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+  .stats{display:flex;gap:18px;flex-wrap:wrap;margin:6px 0 4px}
+  .stats .n{font-size:22px;font-weight:700;color:var(--brand-d)}
+  .stats .l{font-size:11.5px;color:var(--muted)}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:18px 0 10px}
+  input[type=search],select{border:1px solid var(--line);border-radius:8px;padding:8px 11px;
+    font-size:13px;outline:none;background:#fff}
+  input[type=search]{flex:1;min-width:180px}
+  input[type=search]:focus,select:focus{border-color:var(--brand)}
+  table{width:100%;border-collapse:collapse;font-size:13px;background:#fff;
+    border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f8fafc;font-weight:600;color:var(--muted);position:sticky;top:0;font-size:12px}
+  tr:last-child td{border-bottom:0}
+  tr:hover td{background:#fafbff}
+  td.name{font-weight:600;white-space:nowrap}
+  td.mono{font-variant-numeric:tabular-nums}
+  .tag{display:inline-block;background:var(--soft);color:var(--brand-d);border-radius:999px;
+    padding:1px 8px;font-size:11px;margin:0 3px 2px 0}
+  .photo-btn{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:6px;
+    padding:2px 8px;font-size:11.5px;cursor:pointer}
+  .muted{color:var(--muted);font-size:12px}
+  .empty{text-align:center;color:var(--muted);padding:40px 0}
+  #toasts{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:50}
+  .toast{background:#111827;color:#fff;padding:10px 14px;border-radius:8px;font-size:13px;
+    max-width:360px;box-shadow:0 6px 20px rgba(0,0,0,.2);animation:in .2s}
+  .toast.ok{background:#065f46}.toast.err{background:#991b1b}.toast.warn{background:#92400e}
+  @keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+  #logbox{max-height:150px;overflow:auto;font-size:12px;color:var(--muted);
+    background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:10px}
+  #logbox div{padding:1px 0}
+  .modal{position:fixed;inset:0;background:rgba(17,24,39,.55);display:none;
+    align-items:center;justify-content:center;z-index:60;padding:20px}
+  .modal.show{display:flex}
+  .modal .box{background:#fff;border-radius:12px;max-width:520px;width:100%;max-height:86vh;
+    overflow:auto;padding:18px}
+  .modal img{max-width:100%;border-radius:8px;margin-top:8px}
+  .modal .box h3{margin:0 0 8px;font-size:15px}
+  .modal .row{font-size:13px;margin:4px 0}
+  .modal .row b{color:var(--muted);font-weight:600;display:inline-block;min-width:64px}
+</style>
+</head>
+<body>
+<a id="back-home" href="/" style="display:inline-block;margin:10px 18px 0;color:var(--brand-d);font-size:13px;text-decoration:none">← 返回主页</a>
+<script>document.getElementById('back-home').href=(window.__BASE__||'')+'/';</script>
+<header>
+  <h1>通讯录处理工具 · 在线版</h1>
+  <p>Excel / VCF 导入 · 合并去重 · 导出 VCF / Excel（照片自动打包）· 数据不落库，关闭页面即清空</p>
+</header>
+<main>
+  <div class="grid">
+    <section class="card">
+      <h2><span class="idx">1</span>导入 VCF</h2>
+      <div class="drop" id="drop-vcf">
+        点击或拖拽 <strong>.vcf</strong> 文件到此处<br>
+        <span class="muted">支持多选；自动识别 UTF-8 / GBK 等编码</span>
+        <input type="file" id="file-vcf" accept=".vcf,.vcard" multiple hidden>
+      </div>
+      <div class="filelist" id="list-vcf"></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="idx">2</span>导入 Excel</h2>
+      <div class="drop" id="drop-excel">
+        点击或拖拽 <strong>.xlsx / .xlsm / .xls</strong> 文件到此处<br>
+        <span class="muted">带本地照片时，请把 Excel 与照片目录一起打成 <strong>zip</strong> 再拖入</span>
+        <input type="file" id="file-excel" accept=".xlsx,.xlsm,.xls,.zip" multiple hidden>
+      </div>
+      <div class="filelist" id="list-excel"></div>
+      <div class="hint">
+        照片列支持：<code>https://…</code> 链接、<code>data:image/...;base64,…</code>、
+        裸 base64；本地路径照片须走 zip。
+        <button class="btn-ghost" style="padding:4px 10px;margin-left:6px" onclick="downloadTemplate()">下载导入模板</button>
+      </div>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:16px">
+    <h2><span class="idx">3</span>操作</h2>
+    <div class="stats" id="stats"></div>
+    <div class="actions">
+      <button class="btn-primary" id="btn-merge">合并重复联系人</button>
+      <button class="btn-ghost" id="btn-preview">预览合并效果</button>
+      <button class="btn-ghost" id="btn-export-vcf">导出 VCF</button>
+      <button class="btn-ghost" id="btn-export-excel">导出 Excel</button>
+      <button class="btn-danger" id="btn-clear">清空</button>
+    </div>
+    <div id="logbox"></div>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <h2><span class="idx">4</span>联系人列表 <span class="muted" id="list-count"></span></h2>
+    <div class="bar">
+      <input type="search" id="search" placeholder="搜索姓名 / 电话 / 邮箱 / 公司…">
+      <select id="sort">
+        <option value="default">默认顺序</option>
+        <option value="name">按姓名</option>
+        <option value="updated">最近更新</option>
+      </select>
+    </div>
+    <div id="table-wrap"><div class="empty">还没有联系人，请先在上方导入文件。</div></div>
+  </section>
+</main>
+
+<div id="toasts"></div>
+<div class="modal" id="modal"><div class="box" id="modal-box"></div></div>
+
+<script>
+// 二级路径前缀（Lucky 反代部署时由服务端注入 window.__BASE__；内网直连时为空串）
+const BASE = (window.__BASE__ || '').replace(/\/+$/, '');
+const state = { sid:null, token:null, contacts:[], stats:{}, log:[] };
+
+function toast(msg, kind='ok', ms=3200){
+  const el=document.createElement('div');
+  el.className='toast '+kind; el.textContent=msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>{el.remove();}, ms);
+}
+async function api(path, opts={}){
+  const headers = opts.headers || {};
+  if(state.sid){ headers['X-Session-Id']=state.sid; headers['X-Session-Token']=state.token; }
+  const res = await fetch(path, {...opts, headers});
+  if(res.status===401){ toast('会话已过期，正在重建…','warn'); await initSession(); throw new Error('session'); }
+  return res;
+}
+async function initSession(){
+  const r = await fetch(BASE+'/api/session', {method:'POST'});
+  const d = await r.json(); state.sid=d.sid; state.token=d.token;
+}
+
+// ---- 拖拽/选择 ----
+function wireDrop(dropId, inputId, listId, endpoint){
+  const drop=document.getElementById(dropId), input=document.getElementById(inputId);
+  const list=document.getElementById(listId);
+  drop.addEventListener('click',()=>input.click());
+  input.addEventListener('change',()=>{ if(input.files.length) upload(endpoint,input.files,list); input.value=''; });
+  ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over');}));
+  ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over');}));
+  drop.addEventListener('drop',ev=>{ if(ev.dataTransfer.files.length) upload(endpoint,ev.dataTransfer.files,list); });
+}
+async function upload(endpoint, files, listEl){
+  const fd=new FormData();
+  for(const f of files) fd.append('files', f);
+  listEl.textContent='正在导入…';
+  try{
+    const res=await api(endpoint,{method:'POST',body:fd});
+    const data=await res.json();
+    listEl.innerHTML = data.results.map(r=>{
+      if(r.ok) return `<div>✓ ${esc(r.filename)} — 导入 ${r.imported} 条${r.photos?`，照片 ${r.photos} 张`:''}${r.from_zip?'（来自 zip）':''}</div>`;
+      return `<div style="color:var(--err)">✗ ${esc(r.filename)} — ${esc(r.error)}</div>`;
+    }).join('');
+    const warns = data.results.flatMap(r=>r.warnings||[]);
+    warns.slice(0,3).forEach(w=>toast(w,'warn',5000));
+    applyStats(data.stats);
+    await refresh();
+  }catch(e){ listEl.textContent=''; if(e.message!=='session') toast('导入失败：'+e.message,'err'); }
+}
+
+// ---- 渲染 ----
+function applyStats(s){ state.stats=s||{}; renderStats(); }
+function renderStats(){
+  const s=state.stats||{};
+  document.getElementById('stats').innerHTML = [
+    ['联系人', s.count||0],['有电话', s.with_phone||0],['有邮箱', s.with_email||0],
+    ['有照片', s.with_photo||0],['有生日', s.with_birthday||0]
+  ].map(([l,n])=>`<div><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  document.getElementById('list-count').textContent = s.count?`共 ${s.count} 条`:'';
+}
+function renderLog(){
+  const box=document.getElementById('logbox');
+  box.innerHTML = (state.log||[]).slice().reverse().map(l=>{
+    const t=new Date(l.ts*1000).toLocaleTimeString('zh-CN',{hour12:false});
+    return `<div>${t} · ${esc(l.message)}</div>`;
+  }).join('') || '<div>操作记录会显示在这里</div>';
+}
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function renderTable(){
+  const wrap=document.getElementById('table-wrap');
+  if(!state.contacts.length){ wrap.innerHTML='<div class="empty">没有匹配的联系人。</div>'; return; }
+  const rows=state.contacts.map(c=>{
+    const cats=(c.categories||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
+    const photo=c.photo_count?`<button class="photo-btn" onclick="showContact(${c.index})">照片 ${c.photo_count}</button>`:'';
+    return `<tr>
+      <td class="name">${esc(c.name)||'<span class="muted">未命名</span>'}</td>
+      <td class="mono">${c.phones.map(esc).join('<br>')||''}</td>
+      <td>${c.emails.map(esc).join('<br>')||''}</td>
+      <td>${esc(c.organization)||''}${c.title?`<div class="muted">${esc(c.title)}</div>`:''}</td>
+      <td>${esc(c.birthday)||''}${c.lunar_birthday?`<div class="muted">农历 ${esc(c.lunar_birthday)}</div>`:''}</td>
+      <td>${cats}${photo}</td>
+      <td><button class="btn-danger" style="padding:3px 9px;font-size:12px" onclick="delContact(${c.index})">删除</button></td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML=`<table><thead><tr><th>姓名</th><th>电话</th><th>邮箱</th><th>公司/职位</th>
+    <th>生日</th><th>分类/照片</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function refresh(){
+  const q=document.getElementById('search').value.trim();
+  const sort=document.getElementById('sort').value;
+  const res=await api(`${BASE}/api/contacts?q=${encodeURIComponent(q)}&sort=${sort}`);
+  const d=await res.json();
+  state.contacts=d.contacts; state.log=d.log||[]; applyStats(d.stats);
+  renderTable(); renderLog();
+}
+
+async function delContact(idx){
+  if(!confirm('确定删除这条联系人？')) return;
+  await api(BASE+'/api/contacts/'+idx,{method:'DELETE'});
+  await refresh();
+}
+
+function showContact(idx){
+  const c=state.contacts.find(x=>x.index===idx); if(!c) return;
+  const imgs=(c.photo_count?Array.from({length:c.photo_count},(_,i)=>
+    `<img src="${BASE}/api/contacts/${idx}/photo/${i}" alt="照片${i+1}" loading="lazy">`).join(''):'<div class="muted">无照片</div>');
+  document.getElementById('modal-box').innerHTML=`<h3>${esc(c.name)||'未命名'}</h3>
+    <div class="row"><b>电话</b>${c.phones.map(esc).join('、')||'-'}</div>
+    <div class="row"><b>邮箱</b>${c.emails.map(esc).join('、')||'-'}</div>
+    <div class="row"><b>公司</b>${esc(c.organization)||'-'}</div>
+    <div class="row"><b>职位</b>${esc(c.title)||'-'}</div>
+    <div class="row"><b>地址</b>${esc(c.address)||'-'}</div>
+    <div class="row"><b>生日</b>${esc(c.birthday)||'-'}</div>
+    <div class="row"><b>农历</b>${esc(c.lunar_birthday)||'-'}</div>
+    <div class="row"><b>网站</b>${esc(c.website)||'-'}</div>
+    <div class="row"><b>分类</b>${(c.categories||[]).map(esc).join('、')||'-'}</div>
+    <div class="row"><b>备注</b>${esc(c.notes)||'-'}</div>
+    <div style="margin-top:10px">${imgs}</div>
+    <div style="margin-top:14px;text-align:right"><button class="btn-ghost" onclick="closeModal()">关闭</button></div>`;
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal(){ document.getElementById('modal').classList.remove('show'); }
+document.getElementById('modal').addEventListener('click',e=>{ if(e.target.id==='modal') closeModal(); });
+
+// ---- 按钮 ----
+document.getElementById('btn-merge').onclick=async()=>{
+  const res=await api(BASE+'/api/merge',{method:'POST',body:new FormData()});
+  const d=await res.json();
+  if(d.merge && d.merge.total_contacts_before!==undefined){
+    toast(`合并完成：${d.merge.total_contacts_before} → ${d.merge.total_contacts_after}`, 'ok');
+  } else toast('当前没有需要合并的重复联系人');
+  applyStats(d.stats); await refresh();
+};
+document.getElementById('btn-preview').onclick=async()=>{
+  const res=await api(BASE+'/api/merge?dry_run=true',{method:'POST',body:new FormData()});
+  const d=await res.json();
+  if(!d.groups){ toast('没有发现重复联系人'); return; }
+  const items=d.preview.map((g,i)=>{
+    const orig=g.original_contacts.map(o=>`${esc(o.name)||'未命名'}(${(o.phones||[]).join('/')})`).join(' + ');
+    return `<div class="row"><b>组${i+1}</b>${orig}<br><span class="muted">→ ${esc(g.merged_contact.name)}；${esc(g.merge_reasons.join('、'))}</span></div>`;
+  }).join('');
+  document.getElementById('modal-box').innerHTML=`<h3>发现 ${d.groups} 组重复</h3>${items}
+    <div style="margin-top:14px;text-align:right"><button class="btn-ghost" onclick="closeModal()">关闭</button></div>`;
+  document.getElementById('modal').classList.add('show');
+};
+document.getElementById('btn-export-vcf').onclick=()=>doDownload(BASE+'/api/export/vcf');
+document.getElementById('btn-export-excel').onclick=()=>doDownload(BASE+'/api/export/excel');
+document.getElementById('btn-clear').onclick=async()=>{
+  if(!confirm('确定清空当前所有联系人？')) return;
+  await api(BASE+'/api/clear',{method:'POST',body:new FormData()});
+  await refresh(); toast('已清空');
+};
+async function downloadTemplate(){ doDownload(BASE+'/api/template/excel'); }
+async function doDownload(path){
+  try{
+    const res=await api(path);
+    if(!res.ok){ const d=await res.json().catch(()=>({})); toast(d.detail||'导出失败','err'); return; }
+    const blob=await res.blob();
+    const disp=res.headers.get('Content-Disposition')||'';
+    let name=path.includes('excel')?(path.includes('template')?'联系人导入模板.xlsx':'merged.xlsx'):'merged.vcf';
+    const m=disp.match(/filename\*=UTF-8''([^;]+)/); if(m) name=decodeURIComponent(m[1]);
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=name; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    toast('已开始下载 '+name);
+  }catch(e){ if(e.message!=='session') toast('导出失败：'+e.message,'err'); }
+}
+
+document.getElementById('search').addEventListener('input', debounce(refresh,250));
+document.getElementById('sort').addEventListener('change', refresh);
+function debounce(fn,ms){ let t; return ()=>{clearTimeout(t); t=setTimeout(fn,ms);}; }
+
+// 关页/刷新：主动通知服务端清空本会话（数据不留存）
+window.addEventListener('pagehide', ()=>{
+  if(state.sid) navigator.sendBeacon(BASE+'/api/session/close',
+    new Blob([JSON.stringify({sid:state.sid})],{type:'application/json'}));
+});
+
+(async()=>{ await initSession(); renderStats(); renderLog(); wireDrop('drop-vcf','file-vcf','list-vcf',BASE+'/api/import/vcf');
+  wireDrop('drop-excel','file-excel','list-excel',BASE+'/api/import/excel'); })();
+</script>
+</body>
+</html>

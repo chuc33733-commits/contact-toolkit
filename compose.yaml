@@ -1,0 +1,49 @@
+# 通讯录处理工具 · 线上版
+# 部署目录（VM102）：/root/docker/contact-web/
+#   models/ processors/ utils/ config/ 线上版/ Dockerfile .dockerignore compose.yaml
+# 约定：单进程内存会话（关页不留存）→ 不复用多 worker；tuna 国内源已在 Dockerfile 内写死。
+services:
+  contact-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: contact-web:1.2.1
+    container_name: contact-web
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      PORT: "8788"
+      # 二级路径部署：https://aichen.fun/tongxunlu/ （Lucky 反代不改写 path，由服务端剥前缀）
+      BASE_PATH: "/tongxunlu"
+      LOG_LEVEL: info
+      # 临时区落在磁盘（绑定挂载 /var/scratch），不再用 tmpfs：
+      # 真实文档 302 个 PDF 附件约 352M，打包时「原件 + 压缩包」要 ~704M，tmpfs 768M 会打满。
+      TMPDIR: /var/scratch
+      SCRATCH_DIR: /var/scratch
+    volumes:
+      # 会话临时目录（txl-*）落这里；关页/TTL 到期即删，不留存用户数据。
+      # 宿主目录需 chown 10001:10001（容器内 appuser）。
+      - /root/docker/contact-web/scratch:/var/scratch
+    ports:
+      # 仅绑定内网口；外网暴露由 Lucky 反代（管家负责），不直接对公网
+      - "192.168.2.177:8788:8788"
+    # 安全加固：只读根 + tmpfs 兜住 /tmp 的零碎写入
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=256m
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8788/api/health', timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          # 临时区已移到磁盘，内存只装进程本身 + tmpfs /tmp(256M)。
+          # 但大任务（实测 1.2GB 附件）会带来大量 page cache，1G 会让 cgroup 顶到上限
+          # 触发强制回收；给 2G 留出余量，避免大任务下出现内存压力导致的卡顿。
+          memory: 2G
+          cpus: "1.0"
