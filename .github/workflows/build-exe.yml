@@ -100,23 +100,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # GitHub 会把含非 ASCII 的 asset 名重命名（fallback 成 default.<ext>），
+          # 所以上传用 ASCII 名（附版本号），中文名对照写在 release notes 里。
           $tag = "${{ github.ref_name }}"
           $notes = @"
           通讯录处理工具 + 腾讯文档证书下载器（Windows 单文件 exe，免安装）。
 
-          - 通讯录处理工具：Excel ↔ VCF 互转、多号码导入（多列/多分隔符）、VCF 合并去重
-          - 腾讯文档证书下载器：批量下载腾讯文档证书附件，按规则重命名
+          - `contact-toolkit-$tag.exe`：**通讯录处理工具**（Excel ↔ VCF 互转；多号码导入—多列/多分隔符；VCF 合并去重）
+          - `cert-downloader-$tag.exe`：**腾讯文档证书下载器**（批量下载证书附件，按规则重命名）
 
-          下载下方 exe 双击即用。
+          GitHub 资产名不支持中文，故用英文名；下载后双击即用。
           "@
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --title $tag --notes $notes --verify-tag
           }
-          gh release upload $tag "dist/通讯录处理工具.exe" "dist/腾讯文档证书下载器.exe" --clobber
+          Start-Sleep -Seconds 5
+          Copy-Item "dist/通讯录处理工具.exe" "dist/contact-toolkit-$tag.exe"
+          Copy-Item "dist/腾讯文档证书下载器.exe" "dist/cert-downloader-$tag.exe"
+          gh release upload $tag "dist/contact-toolkit-$tag.exe" "dist/cert-downloader-$tag.exe" --clobber
           $names = @(((gh release view $tag --json assets | ConvertFrom-Json).assets) | ForEach-Object { $_.name })
           Write-Host ("release assets: " + ($names -join " / "))
-          if ($names -notcontains "通讯录处理工具.exe" -or $names -notcontains "腾讯文档证书下载器.exe") {
+          if ($names -notcontains "contact-toolkit-$tag.exe" -or $names -notcontains "cert-downloader-$tag.exe") {
             throw ("release assets 不完整: " + ($names -join ", "))
           }
           Write-Host "Release $tag 发布完成（含两个 exe）"
