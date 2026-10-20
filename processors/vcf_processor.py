@@ -207,6 +207,8 @@ class VCFProcessor:
         """
         segments = field_part.split(';')
         name = segments[0].strip().upper()
+        # Apple 导出会带 itemN. 前缀（如 item1.TEL、item2.EMAIL），去掉前缀按基本属性解析
+        name = re.sub(r'^ITEM\d+\.', '', name)
         params: Dict[str, str] = {}
         for segment in segments[1:]:
             if '=' in segment:

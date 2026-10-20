@@ -224,7 +224,7 @@ class Contact:
     @staticmethod
     def _split_multi_value(value: str) -> List[str]:
         """
-        把多值文本拆成列表（支持中英文逗号、分号、竖线）。
+        把多值文本拆成列表（支持中英文逗号、分号、竖线、顿号、换行）。
 
         Args:
             value: 多值文本
@@ -235,7 +235,7 @@ class Contact:
         text = to_text(value)
         if not text:
             return []
-        parts = re.split(r'[;,；，|、]', text)
+        parts = re.split(r'[;,；，|、\n\r]', text)
         return [p.strip() for p in parts if p and p.strip()]
 
     def cleanup_duplicate_phones(self) -> int:

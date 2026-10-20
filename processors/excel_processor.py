@@ -74,20 +74,21 @@ class ExcelProcessor:
             return ""
         return re.sub(r'\s+', '', unicodedata.normalize('NFKC', text).lower())
 
-    def detect_column_mapping(self, df: pd.DataFrame) -> Dict[str, str]:
+    def detect_column_mapping_candidates(self, df: pd.DataFrame) -> Dict[str, List[str]]:
         """
-        自动检测Excel列标题映射。
+        自动检测Excel列标题映射（候选版：同一字段允许对应多个列）。
 
         匹配策略（避免"农历生日"被误判成"生日"这类歧义）：
         1. 精确匹配优先（同长度别名按字段声明顺序）；
         2. 其次按"最长别名包含"匹配（如"手机号码"→手机，"公司名称"→公司）；
-        3. 一个表头只映射一个字段，一个字段只占一个表头。
+        3. 一个表头只映射一个字段；一个字段可以拥有多个表头
+           （如"电话1"、"电话2"、"固话"都归电话字段，按优先级排序）。
 
         Args:
             df: 数据表
 
         Returns:
-            {字段名: 原始列名}
+            {字段名: [原始列名, ...]}（每个字段的列按优先级从高到低排列）
         """
         normalized_headers = [self.normalize_header(col) for col in df.columns]
 
@@ -109,15 +110,30 @@ class ExcelProcessor:
         # 精确匹配 > 更长的别名 > 字段声明顺序靠前；同分时取靠前的表头
         candidates.sort(key=lambda item: (-item[0], -item[1], item[2], item[4]))
 
-        detected_mapping: Dict[str, str] = {}
+        detected: Dict[str, List[str]] = {}
         used_headers = set()
         for _exact, _alias_len, _order, field, index in candidates:
-            if field in detected_mapping or index in used_headers:
+            if index in used_headers:
                 continue
-            detected_mapping[field] = df.columns[index]
+            detected.setdefault(field, []).append(df.columns[index])
             used_headers.add(index)
 
-        return detected_mapping
+        return detected
+
+    def detect_column_mapping(self, df: pd.DataFrame) -> Dict[str, str]:
+        """
+        自动检测Excel列标题映射（兼容接口：每个字段只取优先级最高的一列）。
+
+        Args:
+            df: 数据表
+
+        Returns:
+            {字段名: 原始列名}
+        """
+        return {
+            field: columns[0]
+            for field, columns in self.detect_column_mapping_candidates(df).items()
+        }
 
     # ------------------------------------------------------------------
     # 读取
@@ -213,9 +229,34 @@ class ExcelProcessor:
     # 行 → 联系人
     # ------------------------------------------------------------------
 
-    def _cell(self, row: pd.Series, column_mapping: Dict[str, str], field: str) -> str:
+    def _cell_values(self, row: pd.Series, column_mapping: Dict[str, Any], field: str) -> List[str]:
         """
-        安全读取单元格文本。
+        读取字段对应单元格文本（支持一个字段映射到多列）。
+
+        Args:
+            row: 数据行
+            column_mapping: 列映射（值可以是列名字符串，也可以是列名列表）
+            field: 字段名
+
+        Returns:
+            单元格文本列表（按列顺序，已去空）
+        """
+        columns = column_mapping.get(field)
+        if not columns:
+            return []
+        if isinstance(columns, str):
+            columns = [columns]
+        values: List[str] = []
+        for column in columns:
+            if column in row:
+                text = to_text(row[column])
+                if text:
+                    values.append(text)
+        return values
+
+    def _cell(self, row: pd.Series, column_mapping: Dict[str, Any], field: str) -> str:
+        """
+        安全读取单元格文本（单值字段：取该字段的首选列）。
 
         Args:
             row: 数据行
@@ -225,12 +266,27 @@ class ExcelProcessor:
         Returns:
             单元格文本，不存在或为空时返回空字符串
         """
-        column = column_mapping.get(field)
-        if column is None or column not in row:
-            return ""
-        return to_text(row[column])
+        values = self._cell_values(row, column_mapping, field)
+        return values[0] if values else ""
 
-    def convert_row_to_contact(self, row: pd.Series, column_mapping: Dict[str, str],
+    def _multi_values(self, row: pd.Series, column_mapping: Dict[str, Any], field: str) -> List[str]:
+        """
+        读取字段对应的所有列，并按多值分隔符拆分为列表（电话/邮箱/昵称/分类等列表字段用）。
+
+        Args:
+            row: 数据行
+            column_mapping: 列映射（值可以是列名字符串或列名列表）
+            field: 字段名
+
+        Returns:
+            拆分后的值列表（按列顺序合并，已去空）
+        """
+        values: List[str] = []
+        for text in self._cell_values(row, column_mapping, field):
+            values.extend(Contact._split_multi_value(text))
+        return values
+
+    def convert_row_to_contact(self, row: pd.Series, column_mapping: Dict[str, Any],
                               base_dir: Optional[str] = None,
                               warnings: Optional[List[str]] = None,
                               invalid_emails: Optional[List[str]] = None) -> Contact:
@@ -239,7 +295,8 @@ class ExcelProcessor:
         
         Args:
             row: pandas Series对象，表示一行数据
-            column_mapping: 列映射字典
+            column_mapping: 列映射字典（值可以是列名字符串，也可以是列名列表——
+                列表字段如电话/昵称/邮箱/分类会把所有列的内容合并导入）
             base_dir: 照片相对路径的基准目录（一般为 Excel 文件所在目录）
             warnings: 可选的告警收集列表（照片读取失败等非致命问题会追加到这里）
             invalid_emails: 可选的收集列表，用于汇总"邮箱列内容不是合法邮箱"的值，
@@ -255,16 +312,16 @@ class ExcelProcessor:
         if name:
             contact.set_name(name)
 
-        # 昵称（支持一个单元格内多个昵称）
-        for nickname in Contact._split_multi_value(self._cell(row, column_mapping, 'nickname')):
+        # 昵称（支持多列、一个单元格内多个昵称）
+        for nickname in self._multi_values(row, column_mapping, 'nickname'):
             contact.add_nickname(nickname)
 
-        # 电话号码（支持一个单元格内多个号码）
-        for phone in Contact._split_multi_value(self._cell(row, column_mapping, 'phone')):
+        # 电话号码（支持多列、一个单元格内多个号码）
+        for phone in self._multi_values(row, column_mapping, 'phone'):
             contact.add_phone(phone)
 
-        # 邮箱：非法内容不再静默丢弃，而是收集起来提示用户
-        for email in Contact._split_multi_value(self._cell(row, column_mapping, 'email')):
+        # 邮箱：非法内容不再静默丢弃，而是收集起来提示用户（支持多列）
+        for email in self._multi_values(row, column_mapping, 'email'):
             before = len(contact.emails)
             contact.add_email(email)
             if len(contact.emails) == before and invalid_emails is not None:
@@ -314,8 +371,8 @@ class ExcelProcessor:
         if notes:
             contact.set_notes(notes)
 
-        # 分类标签
-        for category in Contact._split_multi_value(self._cell(row, column_mapping, 'categories')):
+        # 分类标签（支持多列）
+        for category in self._multi_values(row, column_mapping, 'categories'):
             contact.add_category(category)
 
         return contact
@@ -338,11 +395,11 @@ class ExcelProcessor:
         if error:
             return None, {}, error
         
-        # 确定列映射
+        # 确定列映射：默认自动检测（同一字段可占多列，如"电话1/电话2"都会导入）
         if custom_mapping:
             column_mapping = custom_mapping
         else:
-            column_mapping = self.detect_column_mapping(df)
+            column_mapping = self.detect_column_mapping_candidates(df)
         
         if not column_mapping:
             return None, {}, "无法识别Excel文件的列结构，请检查列标题是否正确"
@@ -352,6 +409,12 @@ class ExcelProcessor:
         base_dir = os.path.dirname(os.path.abspath(file_path))
         warnings: List[str] = []
         invalid_emails: List[str] = []
+        
+        # 展示用的单列映射（每个字段取首选列）
+        shown_mapping = {
+            field: (columns[0] if isinstance(columns, list) else columns)
+            for field, columns in column_mapping.items()
+        }
         
         # 统计信息
         stats = {
@@ -363,7 +426,7 @@ class ExcelProcessor:
             'photos_imported': 0,
             'invalid_emails': 0,
             'warnings': warnings,
-            'column_mapping': column_mapping
+            'column_mapping': shown_mapping
         }
         
         # 逐行处理数据

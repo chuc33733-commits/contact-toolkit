@@ -96,10 +96,12 @@ class TestBuildStem(unittest.TestCase):
 
     def test_sample_mode_hides_real_data(self) -> None:
         """预览模式用示例值，不泄露真实姓名/身份证。"""
-        job = make_job(name="真名", id_no="510101200001011234")
+        job = make_job(name="真名", id_no="320102199001011234")
         stem = cd.build_stem(job, "{name}{id}", sample=True)
         self.assertNotIn("真名", stem)
-        self.assertNotIn("510101200001011234", stem)
+        self.assertNotIn("320102199001011234", stem)
+        self.assertIn("张三", stem)
+        self.assertIn("510101200001011234", stem)
 
     def test_all_presets_render(self) -> None:
         """所有预设方案都能渲染出非空且合法的文件名。"""

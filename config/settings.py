@@ -5,7 +5,7 @@
 
 # 应用程序配置
 APP_NAME = "通讯录处理工具"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 WINDOW_WIDTH = 1080
 WINDOW_HEIGHT = 680
 
