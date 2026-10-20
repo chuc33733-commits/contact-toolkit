@@ -1,0 +1,111 @@
+# 在 GitHub 上编译两个 Windows exe（单文件、免安装）
+#
+# 触发方式：
+#   - push 到 main：构建 + 上传 workflow 产物（artifact）
+#   - 推 v* 标签（如 v1.1.1）：构建 + 创建 GitHub Release 并附上两个 exe
+#   - 手动：仓库 Actions 页面 → Build Windows EXE → Run workflow
+#
+# 产物：
+#   dist/通讯录处理工具.exe        （PyInstaller spec: 通讯录处理工具.spec）
+#   dist/腾讯文档证书下载器.exe    （PyInstaller spec: 腾讯文档证书下载器.spec）
+
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PYTHONUTF8: '1'
+  PYTHONIOENCODING: 'utf-8'
+
+concurrency:
+  group: build-exe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+
+      - name: Run unit tests（通讯录处理工具）
+        run: >
+          python -m unittest
+          tests.test_contact
+          tests.test_merge_rules
+          tests.test_utils
+          tests.test_merger_optimization
+          tests.test_processors
+          tests.test_field_expansion
+          tests.test_multi_phone_import
+
+      - name: Run unit tests（腾讯文档证书下载器）
+        run: |
+          python certdown/tests/test_naming.py
+          python certdown/tests/test_exporter.py
+          python certdown/tests/test_kinds.py
+
+      - name: Build 通讯录处理工具
+        run: python -m PyInstaller --clean --noconfirm 通讯录处理工具.spec
+
+      - name: Build 腾讯文档证书下载器
+        run: python -m PyInstaller --clean --noconfirm 腾讯文档证书下载器.spec
+
+      - name: Smoke test（exe 启动存活检查）
+        shell: pwsh
+        run: |
+          $exe = Start-Process -FilePath "dist\通讯录处理工具.exe" -PassThru
+          Start-Sleep -Seconds 10
+          if ($exe.HasExited) {
+            throw "通讯录处理工具.exe 启动后异常退出（ExitCode=$($exe.ExitCode)）"
+          }
+          Stop-Process -Id $exe.Id -Force
+          Write-Host "OK: 通讯录处理工具.exe 启动存活 10s 无崩溃"
+          Get-ChildItem dist\*.exe |
+            Select-Object Name, @{N='SizeMB';E={[math]::Round($_.Length/1MB,1)}} |
+            Format-Table -AutoSize
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: contact-toolkit-exe
+          path: |
+            dist/通讯录处理工具.exe
+            dist/腾讯文档证书下载器.exe
+          if-no-files-found: error
+
+      - name: Attach EXE to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body: |
+            通讯录处理工具 + 腾讯文档证书下载器（Windows 单文件 exe，免安装）。
+
+            - 通讯录处理工具：Excel ↔ VCF 互转、多号码导入（多列/多分隔符）、VCF 合并去重
+            - 腾讯文档证书下载器：批量下载腾讯文档证书附件，按规则重命名
+
+            下载下方 exe 双击即用。
+          files: |
+            dist/通讯录处理工具.exe
+            dist/腾讯文档证书下载器.exe
