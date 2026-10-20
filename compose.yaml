@@ -7,7 +7,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: contact-web:1.2.1
+    image: contact-web:1.2.2
     container_name: contact-web
     restart: unless-stopped
     environment:
