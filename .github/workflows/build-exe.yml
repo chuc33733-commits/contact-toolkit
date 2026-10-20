@@ -96,16 +96,27 @@ jobs:
 
       - name: Attach EXE to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          name: ${{ github.ref_name }}
-          body: |
-            通讯录处理工具 + 腾讯文档证书下载器（Windows 单文件 exe，免安装）。
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $notes = @"
+          通讯录处理工具 + 腾讯文档证书下载器（Windows 单文件 exe，免安装）。
 
-            - 通讯录处理工具：Excel ↔ VCF 互转、多号码导入（多列/多分隔符）、VCF 合并去重
-            - 腾讯文档证书下载器：批量下载腾讯文档证书附件，按规则重命名
+          - 通讯录处理工具：Excel ↔ VCF 互转、多号码导入（多列/多分隔符）、VCF 合并去重
+          - 腾讯文档证书下载器：批量下载腾讯文档证书附件，按规则重命名
 
-            下载下方 exe 双击即用。
-          files: |
-            dist/通讯录处理工具.exe
-            dist/腾讯文档证书下载器.exe
+          下载下方 exe 双击即用。
+          "@
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title $tag --notes $notes --verify-tag
+          }
+          gh release upload $tag "dist/通讯录处理工具.exe" "dist/腾讯文档证书下载器.exe" --clobber
+          $names = @(((gh release view $tag --json assets | ConvertFrom-Json).assets) | ForEach-Object { $_.name })
+          Write-Host ("release assets: " + ($names -join " / "))
+          if ($names -notcontains "通讯录处理工具.exe" -or $names -notcontains "腾讯文档证书下载器.exe") {
+            throw ("release assets 不完整: " + ($names -join ", "))
+          }
+          Write-Host "Release $tag 发布完成（含两个 exe）"
